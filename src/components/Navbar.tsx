@@ -1,32 +1,18 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ShoppingBag, User, LogOut } from "lucide-react";
-import { useEffect, useState } from "react";
-import { User as SupabaseUser } from "@supabase/supabase-js";
+import { ShoppingBag, User, LogOut, Wallet } from "lucide-react";
+import { useWalletAuth } from "@/hooks/use-wallet-auth";
 
 const Navbar = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const { address, isWalletAuthenticated, signOut: walletSignOut } = useWalletAuth();
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const handleLogout = () => {
+    walletSignOut();
     toast({
-      title: "Logged out",
+      title: "Wallet Disconnected",
       description: "You've been successfully logged out.",
     });
     navigate("/auth");
@@ -43,7 +29,18 @@ const Navbar = () => {
         </Link>
         
         <div className="flex items-center gap-2">
-          {user ? (
+          {/* Show wallet address if connected */}
+          {isWalletAuthenticated && address && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/20 dark:to-emerald-900/20 rounded-md border border-green-200 dark:border-green-800">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <Wallet className="h-4 w-4 text-green-600" />
+              <span className="text-sm font-mono text-green-700 dark:text-green-300">
+                {`${address.slice(0, 6)}...${address.slice(-4)}`}
+              </span>
+            </div>
+          )}
+          
+          {isWalletAuthenticated ? (
             <>
               <Button variant="ghost" onClick={() => navigate("/dashboard")}>
                 <User className="h-4 w-4 mr-2" />
@@ -51,12 +48,12 @@ const Navbar = () => {
               </Button>
               <Button variant="ghost" onClick={handleLogout}>
                 <LogOut className="h-4 w-4 mr-2" />
-                Logout
+                Disconnect
               </Button>
             </>
           ) : (
             <Button onClick={() => navigate("/auth")}>
-              Sign In
+              Connect Wallet
             </Button>
           )}
         </div>

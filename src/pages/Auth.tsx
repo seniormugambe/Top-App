@@ -1,159 +1,188 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
-import { z } from "zod";
-
-const emailSchema = z.string().email("Invalid email address");
-const passwordSchema = z.string().min(6, "Password must be at least 6 characters");
+import { BaseWalletConnect } from "@/components/BaseWalletConnect";
+import { useWalletAuth } from "@/hooks/use-wallet-auth";
+import { useAuthReturn } from "@/components/RouteGuard";
+import { Shield, Zap, Globe, ArrowRight, Sparkles } from "lucide-react";
 
 const Auth = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLogin, setIsLogin] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
+  const { address, isWalletAuthenticated, isConnected } = useWalletAuth();
+  const { handleAuthSuccess } = useAuthReturn();
+  const [redirectCountdown, setRedirectCountdown] = useState(0);
 
+  // Check if there's a return URL
+  const params = new URLSearchParams(location.search);
+  const returnTo = params.get('returnTo');
+
+  // Handle Base Wallet connection and redirect
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        navigate("/");
-      }
-    });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        navigate("/");
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
-
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      emailSchema.parse(email);
-      passwordSchema.parse(password);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        toast({
-          title: "Validation Error",
-          description: error.errors[0].message,
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
-    setIsLoading(true);
-
-    try {
-      if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        if (error) throw error;
-
-        toast({
-          title: "Welcome back!",
-          description: "You've successfully logged in.",
-        });
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/`,
-          },
-        });
-
-        if (error) throw error;
-
-        toast({
-          title: "Account created!",
-          description: "Welcome to TopUp Shop. You can now start shopping.",
-        });
-      }
-    } catch (error: any) {
+    if (isWalletAuthenticated && address) {
       toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
+        title: "Base Wallet Connected! 🎉",
+        description: `Welcome! Connected with ${address.slice(0, 6)}...${address.slice(-4)}`,
       });
-    } finally {
-      setIsLoading(false);
+      
+      // Start countdown
+      setRedirectCountdown(3);
+      const interval = setInterval(() => {
+        setRedirectCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            handleAuthSuccess();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(interval);
     }
-  };
+  }, [isWalletAuthenticated, address, toast, navigate]);
+
+  const features = [
+    {
+      icon: Shield,
+      title: "Secure Payments",
+      description: "Blockchain-secured transactions with no credit card required"
+    },
+    {
+      icon: Zap,
+      title: "Fast Checkout",
+      description: "Quick ETH payments with instant confirmation"
+    },
+    {
+      icon: Globe,
+      title: "Global Shipping",
+      description: "Worldwide delivery with decentralized payment processing"
+    }
+  ];
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-secondary to-background p-4">
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-3xl font-bold text-center bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            TopUp Shop
-          </CardTitle>
-          <CardDescription className="text-center">
-            {isLogin ? "Welcome back! Sign in to continue" : "Create an account to start shopping"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleAuth} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+    <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-secondary/20">
+      {/* Hero Section */}
+      <div className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-accent/10 to-primary/10" />
+        <div className="relative container mx-auto px-4 py-16">
+          <div className="text-center space-y-6 mb-12">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-sm font-medium">
+              <Sparkles className="h-4 w-4" />
+              Web3 Authentication
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Please wait
-                </>
-              ) : isLogin ? (
-                "Sign In"
-              ) : (
-                "Sign Up"
-              )}
-            </Button>
-          </form>
-          <div className="mt-4 text-center text-sm">
-            <button
-              type="button"
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-primary hover:underline"
-            >
-              {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
-            </button>
+            <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
+              Welcome to TopUp Shop
+            </h1>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              The future of e-commerce. Connect your Base Wallet to shop premium physical products with blockchain security.
+            </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="container mx-auto px-4 pb-16">
+        <div className="flex flex-col lg:flex-row gap-12 items-start">
+          {/* Connection Card */}
+          <div className="w-full lg:w-1/2 space-y-6">
+            <BaseWalletConnect />
+            
+            {/* Redirect Notice */}
+            {redirectCountdown > 0 && (
+              <Card className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/20">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    <p className="text-sm text-green-700 dark:text-green-300">
+                      {returnTo 
+                        ? `Redirecting back in ${redirectCountdown} seconds...`
+                        : `Redirecting to shop in ${redirectCountdown} seconds...`
+                      }
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Quick Actions */}
+            {isConnected && (
+              <div className="space-y-3">
+                <Button 
+                  onClick={handleAuthSuccess}
+                  className="w-full bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
+                >
+                  <ArrowRight className="mr-2 h-4 w-4" />
+                  {returnTo ? 'Continue' : 'Continue to Shop'}
+                </Button>
+                <Button 
+                  onClick={() => navigate("/dashboard")}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Go to Dashboard
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Features */}
+          <div className="w-full lg:w-1/2 space-y-6">
+            <div>
+              <h2 className="text-2xl font-bold mb-4">Why Choose Web3?</h2>
+              <div className="space-y-4">
+                {features.map((feature, index) => (
+                  <Card key={index} className="p-4">
+                    <div className="flex items-start gap-4">
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        <feature.icon className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold mb-1">{feature.title}</h3>
+                        <p className="text-sm text-muted-foreground">{feature.description}</p>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+
+            {/* Network Info */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Supported Networks</CardTitle>
+                <CardDescription>
+                  Connect to any of these Base networks
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+                  <div>
+                    <p className="font-medium">Base Mainnet</p>
+                    <p className="text-sm text-muted-foreground">Production network</p>
+                  </div>
+                  <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
+                    Recommended
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg">
+                  <div>
+                    <p className="font-medium">Base Sepolia</p>
+                    <p className="text-sm text-muted-foreground">Test network</p>
+                  </div>
+                  <Badge variant="outline">
+                    Testnet
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
